@@ -25,3 +25,4 @@ proccess_payments-*.tar
 
 ./datasets/*.csv
 
+erl_crash.dump
