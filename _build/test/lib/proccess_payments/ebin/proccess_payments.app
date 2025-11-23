@@ -1,0 +1,8 @@
+{application,proccess_payments,
+             [{modules,['Elixir.ProcessPayments',
+                        'Elixir.ProcessPayments.DataProcessor']},
+              {optional_applications,[]},
+              {applications,[kernel,stdlib,elixir,logger]},
+              {description,"proccess_payments"},
+              {registered,[]},
+              {vsn,"0.1.0"}]}.
