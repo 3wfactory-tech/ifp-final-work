@@ -4,35 +4,36 @@ defmodule App.WorkerAggregator do
 
   # --- API Pública ---
   def start_link(_) do
-    GenServer.start_link(__MODULE__, %{successful: [], failed: [], aggregated: %{}}, name: __MODULE__)
+    GenServer.start_link(__MODULE__, %{successful: [], failed: [], aggregated: %{}, max_value_risc: 100000}, name: __MODULE__)
   end
 
   @doc """
-  Processa os resultados do Task.async_stream, separando sucessos e erros.
+  Define o valor máximo de risco para análise.
   """
-  def process_results(results, max_value_risc_card_use) do
-    GenServer.call(__MODULE__, {:process_results, results, max_value_risc_card_use}, :infinity)
+  def set_max_value_risc(value) do
+    GenServer.cast(__MODULE__, {:set_max_value_risc, value})
   end
 
   @doc """
-  Adiciona um registro bem-sucedido ao estado.
+  Recebe um resultado de processamento de linha e agrega imediatamente.
+  Este é o método principal que será chamado pelo Stream.run().
   """
-  def add_success(record) do
-    GenServer.cast(__MODULE__, {:add_success, record})
+  def tally(result) do
+    GenServer.cast(__MODULE__, {:tally, result})
   end
 
   @doc """
-  Adiciona um erro ao estado.
-  """
-  def add_error(error) do
-    GenServer.cast(__MODULE__, {:add_error, error})
-  end
-
-  @doc """
-  Retorna o resultado final com agregações.
+  Retorna o resultado final com agregações e análise de risco.
   """
   def get_result() do
     GenServer.call(__MODULE__, :get_result)
+  end
+
+  @doc """
+  Retorna estatísticas do processamento.
+  """
+  def get_stats() do
+    GenServer.call(__MODULE__, :get_stats)
   end
 
   @doc """
@@ -50,65 +51,70 @@ defmodule App.WorkerAggregator do
   end
 
   @impl true
-  def handle_call({:process_results, results, max_value_risc_card_use}, _from, _state) do
-    # Separa sucessos e erros
-    {successful, failed} =
-      results
-      |> Enum.reduce({[], []}, fn
-        {:ok, {:ok, record}}, {succ, fail} -> {[record | succ], fail}
-        {:ok, {:error, reason}}, {succ, fail} -> {succ, [reason | fail]}
-        {:exit, reason}, {succ, fail} -> {succ, [reason | fail]}
-      end)
-
-    # Agrega por ocupação
-    aggregated =
-      successful
-      |> Enum.reduce(%{}, fn record, acc ->
-        Map.update(acc, record.ocupacao, record.numero_de_operacoes, &(&1 + record.numero_de_operacoes))
-      end)
-      |> analytics_risc_card_use(max_value_risc_card_use)
-
-    new_state = %{
-      successful: successful,
-      failed: failed,
-      aggregated: aggregated
-    }
-
-    result = {:ok, aggregated, failed}
-    {:reply, result, new_state}
+  def handle_cast({:set_max_value_risc, value}, state) do
+    {:noreply, %{state | max_value_risc: value}}
   end
 
   @impl true
-  def handle_call(:get_result, _from, state) do
-    {:reply, state, state}
-  end
-
-  @impl true
-  def handle_cast({:add_success, record}, state) do
+  def handle_cast({:tally, {:ok, record}}, state) do
+    # Adiciona o registro aos sucessos
     new_successful = [record | state.successful]
-    {:noreply, %{state | successful: new_successful}}
+    
+    # Agrega imediatamente por ocupação
+    new_aggregated = 
+      Map.update(
+        state.aggregated, 
+        record.ocupacao, 
+        record.numero_de_operacoes, 
+        &(&1 + record.numero_de_operacoes)
+      )
+    
+    {:noreply, %{state | successful: new_successful, aggregated: new_aggregated}}
   end
 
   @impl true
-  def handle_cast({:add_error, error}, state) do
-    new_failed = [error | state.failed]
+  def handle_cast({:tally, {:error, reason}}, state) do
+    # Adiciona o erro à lista de falhas
+    new_failed = [reason | state.failed]
     {:noreply, %{state | failed: new_failed}}
   end
 
   @impl true
   def handle_cast(:reset, _state) do
-    {:noreply, %{successful: [], failed: [], aggregated: %{}}}
+    {:noreply, %{successful: [], failed: [], aggregated: %{}, max_value_risc: 100000}}
+  end
+
+  @impl true
+  def handle_call(:get_result, _from, state) do
+    # Aplica análise de risco sobre os dados agregados
+    aggregated_with_risk = analytics_risc_card_use(state.aggregated, state.max_value_risc)
+    
+    result = {:ok, aggregated_with_risk, state.failed}
+    {:reply, result, state}
+  end
+
+  @impl true
+  def handle_call(:get_stats, _from, state) do
+    stats = %{
+      successful_count: length(state.successful),
+      failed_count: length(state.failed),
+      occupations_count: map_size(state.aggregated),
+      total_operations: Enum.sum(Map.values(state.aggregated))
+    }
+    {:reply, stats, state}
   end
 
   # --- Funções Privadas ---
 
-  defp analytics_risc_card_use(results, max_value_risc_card_use) do
-    Enum.map(results, fn {item, value} ->
+  defp analytics_risc_card_use(aggregated_map, max_value_risc) do
+    aggregated_map
+    |> Enum.map(fn {occupation, operations_count} ->
       %{
-        person: item,
-        operations_count: value,
-        exist_risc: if(value > max_value_risc_card_use, do: :high, else: :low)
+        person: occupation,
+        operations_count: operations_count,
+        exist_risc: if(operations_count > max_value_risc, do: :high, else: :low)
       }
     end)
+    |> Enum.sort_by(& &1.operations_count, :desc)
   end
 end
