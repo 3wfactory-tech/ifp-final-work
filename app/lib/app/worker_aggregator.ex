@@ -59,16 +59,16 @@ defmodule App.WorkerAggregator do
   def handle_cast({:tally, {:ok, record}}, state) do
     # Adiciona o registro aos sucessos
     new_successful = [record | state.successful]
-    
+
     # Agrega imediatamente por ocupação
-    new_aggregated = 
+    new_aggregated =
       Map.update(
-        state.aggregated, 
-        record.ocupacao, 
-        record.numero_de_operacoes, 
+        state.aggregated,
+        record.ocupacao,
+        record.numero_de_operacoes,
         &(&1 + record.numero_de_operacoes)
       )
-    
+
     {:noreply, %{state | successful: new_successful, aggregated: new_aggregated}}
   end
 
@@ -81,14 +81,14 @@ defmodule App.WorkerAggregator do
 
   @impl true
   def handle_cast(:reset, _state) do
-    {:noreply, %{successful: [], failed: [], aggregated: %{}, max_value_risc: 100000}}
+    {:noreply, %{successful: [], failed: [], aggregated: %{}, max_value_risc: 5000000}}
   end
 
   @impl true
   def handle_call(:get_result, _from, state) do
     # Aplica análise de risco sobre os dados agregados
     aggregated_with_risk = analytics_risc_card_use(state.aggregated, state.max_value_risc)
-    
+
     result = {:ok, aggregated_with_risk, state.failed}
     {:reply, result, state}
   end
