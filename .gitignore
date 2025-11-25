@@ -25,3 +25,7 @@ proccess_payments-*.tar
 
 ./datasets/*.csv
 
+*.beam
+/config/*.secret.exs
+.elixir_ls/
+datasets/*
