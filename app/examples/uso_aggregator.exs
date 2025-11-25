@@ -12,18 +12,23 @@ dataset_dir = Path.expand("../datasets")
 csv_files =
   dataset_dir
   |> File.ls!()
+  # Filtra apenas arquivos que terminam com ".csv" usando função anônima (&) e operador de correspondência (?)
   |> Enum.filter(&String.ends_with?(&1, ".csv"))
+  # Mapeia os nomes dos arquivos para seus caminhos completos usando Path.join
   |> Enum.map(&Path.join(dataset_dir, &1))
 
 
 if csv_files == [] do
   IO.puts("Nenhum arquivo CSV encontrado na pasta datasets.")
 else
+  # Marca o início do tempo total de processamento usando monotonic_time,
+  # que retorna o tempo atual em milissegundos baseado em um relógio monotônico.
+  # O relógio monotônico é garantido para nunca voltar no tempo, sendo ideal para medir intervalos.
   total_start = :erlang.monotonic_time(:millisecond)
 
   # Processamento funcional dos arquivos e acumulação dos totais
   {totals, _} =
-    Enum.reduce(csv_files, {%{operations: 0, high_risk: 0, low_risk: 0, errors: 0, lines: 0}, total_start}, fn file_path, {acc, _start_time} ->
+    Enum.reduce(csv_files, {%{operations: 0, high_risk: 0, low_risk: 0, errors: 0, lines: 0}, total_start}, fn file_path, {acc} ->
       IO.puts("\n📁 Processando arquivo: #{file_path}\n")
       {:ok, aggregated, stats, errors} = App.Processor.run(file_path)
 
