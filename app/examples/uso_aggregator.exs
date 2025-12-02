@@ -28,7 +28,7 @@ else
 
   # Processamento funcional dos arquivos e acumulação dos totais
   {totals, _} =
-    Enum.reduce(csv_files, {%{operations: 0, high_risk: 0, low_risk: 0, errors: 0, lines: 0}, total_start}, fn file_path, {acc} ->
+    Enum.reduce(csv_files, {%{operations: 0, high_risk: 0, low_risk: 0, errors: 0, lines: 0}, total_start}, fn file_path, {acc, start_time} ->
       IO.puts("\n📁 Processando arquivo: #{file_path}\n")
       {:ok, aggregated, stats, errors} = App.Processor.run(file_path)
 
@@ -63,7 +63,7 @@ else
         errors: acc.errors + total_errors,
         lines: acc.lines + lines_processed
       }
-      {new_acc}
+      {new_acc, start_time}
     end)
 
   total_end = :erlang.monotonic_time(:millisecond)
